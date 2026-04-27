@@ -1,0 +1,6 @@
+{
+  "name": "E-Windo Delivery Report",
+  "description": "A real-time delivery reporting system for Auto Pabrik E-Windo with barcode scanner, charts, and Excel export.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": []
+}

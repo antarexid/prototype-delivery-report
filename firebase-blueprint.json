@@ -1,0 +1,39 @@
+{
+  "entities": {
+    "Customer": {
+      "title": "Customer",
+      "description": "Represents a customer PT and their delivery schedule",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "quantitySchedule": { "type": "number" },
+        "category": { "type": "string", "enum": ["AUTO", "AUDIO"] }
+      },
+      "required": ["name", "quantitySchedule", "category"]
+    },
+    "Delivery": {
+      "title": "Delivery",
+      "description": "A single delivery record",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "actualQuantity": { "type": "number" },
+        "deliveryDate": { "type": "string", "format": "date-time" },
+        "barcode": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["customerId", "customerName", "actualQuantity", "deliveryDate"]
+    }
+  },
+  "firestore": {
+    "/customers/{customerId}": {
+      "schema": "Customer",
+      "description": "List of customers with their scheduled quantities"
+    },
+    "/deliveries/{deliveryId}": {
+      "schema": "Delivery",
+      "description": "Actual delivery records"
+    }
+  }
+}

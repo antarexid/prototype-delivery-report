@@ -1,5 +1,3 @@
-import { Timestamp } from 'firebase/firestore';
-
 export interface Customer {
   id: string;
   name: string;
@@ -12,7 +10,7 @@ export interface Delivery {
   customerId: string;
   customerName: string;
   actualQuantity: number;
-  deliveryDate: Timestamp;
+  deliveryDate: { toDate: () => Date };
   barcode?: string;
   notes?: string;
 }

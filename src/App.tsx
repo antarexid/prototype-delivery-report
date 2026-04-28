@@ -6,7 +6,7 @@ import Dashboard from './components/Dashboard';
 import DeliveryManager from './components/DeliveryManager';
 import CustomerManager from './components/CustomerManager';
 import AdminLogin from './components/AdminLogin';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface AuthContextType {
   user: User | null;

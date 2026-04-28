@@ -14,7 +14,11 @@ export default function CustomerManager({ customers }: CustomerManagerProps) {
   const [editValue, setEditValue] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [isAdding, setIsAdding] = useState(false);
-  const [newCustomer, setNewCustomer] = useState({ name: '', quantitySchedule: '', category: 'AUTO' as const });
+  const [newCustomer, setNewCustomer] = useState<{name: string, quantitySchedule: string, category: 'AUTO' | 'AUDIO'}>({ 
+    name: '', 
+    quantitySchedule: '', 
+    category: 'AUTO' 
+  });
 
   const [selectedCategory, setSelectedCategory] = useState<'ALL' | 'AUTO' | 'AUDIO'>('ALL');
 

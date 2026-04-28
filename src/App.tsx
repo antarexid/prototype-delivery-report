@@ -6,7 +6,7 @@ import Dashboard from './components/Dashboard';
 import DeliveryManager from './components/DeliveryManager';
 import CustomerManager from './components/CustomerManager';
 import AdminLogin from './components/AdminLogin';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface AuthContextType {
   user: User | null;
@@ -47,10 +47,10 @@ export default function App() {
           setCustomers(JSON.parse(savedCustomers));
         } else {
           // Seed initial data
-          const initial = CUSTOMERS_INITIAL_DATA.map((c, i) => ({
+          const initial: Customer[] = CUSTOMERS_INITIAL_DATA.map((c, i) => ({
             ...c,
             id: `seed-${i}-${Date.now()}`
-          }));
+          })) as any;
           setCustomers(initial);
           localStorage.setItem('ewindo_customers', JSON.stringify(initial));
         }

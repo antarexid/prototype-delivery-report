@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Customer } from '../types';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { doc, updateDoc, deleteDoc, addDoc, collection } from 'firebase/firestore';
+import { useAuth } from '../App';
 import { Edit2, Trash2, Plus, Save, X, Search, UserPlus } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -10,6 +9,7 @@ interface CustomerManagerProps {
 }
 
 export default function CustomerManager({ customers }: CustomerManagerProps) {
+  const { updateCustomer, deleteCustomer, createCustomer } = useAuth();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -20,28 +20,26 @@ export default function CustomerManager({ customers }: CustomerManagerProps) {
 
   const handleUpdate = async (id: string) => {
     try {
-      await updateDoc(doc(db, 'customers', id), {
-        quantitySchedule: Number(editValue)
-      });
+      await updateCustomer(id, { quantitySchedule: Number(editValue) });
       setEditingId(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'customers');
+      console.error("Update failed", error);
     }
   };
 
   const handleDelete = async (id: string) => {
     if (!window.confirm('Delete this customer? This will not remove their previous delivery logs.')) return;
     try {
-      await deleteDoc(doc(db, 'customers', id));
+      await deleteCustomer(id);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, 'customers');
+      console.error("Delete failed", error);
     }
   };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await addDoc(collection(db, 'customers'), {
+      await createCustomer({
         name: newCustomer.name,
         quantitySchedule: Number(newCustomer.quantitySchedule),
         category: newCustomer.category
@@ -49,7 +47,7 @@ export default function CustomerManager({ customers }: CustomerManagerProps) {
       setIsAdding(false);
       setNewCustomer({ name: '', quantitySchedule: '', category: 'AUTO' });
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'customers');
+      console.error("Create failed", error);
     }
   };
 

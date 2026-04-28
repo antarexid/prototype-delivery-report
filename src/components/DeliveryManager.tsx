@@ -4,8 +4,6 @@ import {
   Plus, Search, Calendar, Scan, Trash2, Download, Filter, 
   MapPin, Clock, Tag, FileText, ChevronRight, X, Truck, Activity, Upload
 } from 'lucide-react';
-import { collection, addDoc, deleteDoc, doc, Timestamp, writeBatch } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../App';
 import BarcodeScanner from './BarcodeScanner';
 import { format } from 'date-fns';
@@ -19,7 +17,7 @@ interface DeliveryManagerProps {
 }
 
 export default function DeliveryManager({ customers, deliveries }: DeliveryManagerProps) {
-  const { user } = useAuth();
+  const { user, createDelivery, deleteDelivery, importDeliveries } = useAuth();
   const [isAdding, setIsAdding] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -41,19 +39,16 @@ export default function DeliveryManager({ customers, deliveries }: DeliveryManag
     reader.onload = async (event) => {
       try {
         const data = new Uint8Array(event.target?.result as ArrayBuffer);
-        // Important: use cellDates: true to handle Excel date serialization
         const workbook = XLSX.read(data, { type: 'array', cellDates: true });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        // Use defval to ensure empty cells are represented as strings
         const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" }) as any[];
 
-        const batch = writeBatch(db);
+        const toImport: Omit<Delivery, 'id'>[] = [];
         let count = 0;
         let skipped = 0;
 
         for (const row of jsonData) {
-          // Column mapping with flexible keys
           const custName = String(row.Customer || row['Customer Name'] || row.PT || '').trim();
           const partName = String(row['Part Name'] || row.Part || '').trim();
           const qty = Number(row.Quantity || row.Qty || row.Actual || 0);
@@ -61,16 +56,13 @@ export default function DeliveryManager({ customers, deliveries }: DeliveryManag
           const barcode = String(row.Barcode || row.BC || '').trim();
           const notesFromExcel = String(row.Notes || row.Keterangan || '').trim();
           
-          // Basic validation: skip completely empty rows
           if (!custName && !qty && !barcode) continue;
 
-          // Construct notes: include Part Name if provided
           const finalNotesArr = [];
           if (partName) finalNotesArr.push(`Part: ${partName}`);
           if (notesFromExcel) finalNotesArr.push(notesFromExcel);
           const finalNotes = finalNotesArr.join(" | ");
 
-          // Attempt to find customer in database with fuzzy matching
           const cleanExcelName = custName.toLowerCase();
           const customer = customers.find(c => {
             const cleanDbName = c.name.toLowerCase();
@@ -80,34 +72,31 @@ export default function DeliveryManager({ customers, deliveries }: DeliveryManag
           });
 
           if (!customer) {
-            console.warn(`Customer matching failed for: "${custName}"`);
             skipped++;
             continue;
           }
 
-          // Handle date logic (handle JS Date objects from cellDates: true)
-          let deliveryDate = Timestamp.now();
+          let deliveryDate = new Date();
           if (rawDate) {
             const parsedDate = rawDate instanceof Date ? rawDate : new Date(rawDate);
             if (!isNaN(parsedDate.getTime())) {
-              deliveryDate = Timestamp.fromDate(parsedDate);
+              deliveryDate = parsedDate;
             }
           }
 
-          const newDocRef = doc(collection(db, 'deliveries'));
-          batch.set(newDocRef, {
+          toImport.push({
             customerId: customer.id,
             customerName: customer.name,
             actualQuantity: qty,
             barcode: barcode,
             notes: finalNotes,
-            deliveryDate: deliveryDate
+            deliveryDate: { toDate: () => deliveryDate } as any
           });
           count++;
         }
 
         if (count > 0) {
-          await batch.commit();
+          await importDeliveries(toImport);
           let msg = `Successfully imported ${count} records.`;
           if (skipped > 0) msg += ` (${skipped} rows skipped due to unknown customer names)`;
           alert(msg);
@@ -116,7 +105,7 @@ export default function DeliveryManager({ customers, deliveries }: DeliveryManag
         }
       } catch (error) {
         console.error("Excel import failed:", error);
-        alert("Failed to parse Excel file. Ensure it follows the required format.");
+        alert("Failed to parse Excel file.");
       } finally {
         setIsImporting(false);
         if (e.target) e.target.value = '';
@@ -141,22 +130,19 @@ export default function DeliveryManager({ customers, deliveries }: DeliveryManag
     if (!selectedCustomer) return;
 
     try {
-      await addDoc(collection(db, 'deliveries'), {
+      await createDelivery({
         customerId: formData.customerId,
         customerName: selectedCustomer.name,
         actualQuantity: Number(formData.actualQuantity),
         barcode: formData.barcode,
         notes: formData.notes,
-        deliveryDate: Timestamp.now()
+        deliveryDate: new Date() as any
       });
 
       setFormData({ customerId: '', actualQuantity: '', barcode: '', notes: '' });
       setIsAdding(false);
-      
-      // Simulate Email Notification
-      console.log(`Notification: Delivery logged for ${selectedCustomer.name} - ${formData.actualQuantity} units. Email sent to admin.`);
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'deliveries');
+      console.error("Create delivery failed", error);
     }
   };
 
@@ -164,9 +150,9 @@ export default function DeliveryManager({ customers, deliveries }: DeliveryManag
     if (!user || user.role !== 'admin') return;
     if (!window.confirm('Are you sure you want to delete this record?')) return;
     try {
-      await deleteDoc(doc(db, 'deliveries', id));
+      await deleteDelivery(id);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, 'deliveries');
+      console.error("Delete delivery failed", error);
     }
   };
 

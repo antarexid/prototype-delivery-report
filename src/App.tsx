@@ -1,18 +1,4 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
-import { 
-  collection, 
-  onSnapshot, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  doc, 
-  query, 
-  orderBy, 
-  Timestamp,
-  writeBatch,
-  getDocs
-} from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from './lib/firebase';
 import { Customer, Delivery, User } from './types';
 import { CUSTOMERS_INITIAL_DATA } from './constants';
 import Header from './components/Header';
@@ -26,6 +12,13 @@ interface AuthContextType {
   user: User | null;
   login: (password: string) => boolean;
   logout: () => void;
+  // New props for local state management
+  updateCustomer: (id: string, data: Partial<Customer>) => Promise<void>;
+  deleteCustomer: (id: string) => Promise<void>;
+  createCustomer: (data: Omit<Customer, 'id'>) => Promise<void>;
+  createDelivery: (data: Omit<Delivery, 'id'>) => Promise<void>;
+  deleteDelivery: (id: string) => Promise<void>;
+  importDeliveries: (records: Omit<Delivery, 'id'>[]) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -43,51 +36,100 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'delivery' | 'customers'>('dashboard');
   const [loading, setLoading] = useState(true);
 
-  // Initialize data if empty
+  // Initialize data from LocalStorage
   useEffect(() => {
-    const checkAndSeedData = async () => {
-      const q = query(collection(db, 'customers'));
-      const snapshot = await getDocs(q);
-      
-      if (snapshot.empty) {
-        console.log("Seeding initial customer data...");
-        const batch = writeBatch(db);
-        CUSTOMERS_INITIAL_DATA.forEach((cust) => {
-          const newDocRef = doc(collection(db, 'customers'));
-          batch.set(newDocRef, cust);
-        });
-        await batch.commit();
+    const loadData = () => {
+      try {
+        const savedCustomers = localStorage.getItem('ewindo_customers');
+        const savedDeliveries = localStorage.getItem('ewindo_deliveries');
+
+        if (savedCustomers) {
+          setCustomers(JSON.parse(savedCustomers));
+        } else {
+          // Seed initial data
+          const initial = CUSTOMERS_INITIAL_DATA.map((c, i) => ({
+            ...c,
+            id: `seed-${i}-${Date.now()}`
+          }));
+          setCustomers(initial);
+          localStorage.setItem('ewindo_customers', JSON.stringify(initial));
+        }
+
+        if (savedDeliveries) {
+          // Firestore Timestamp objects need special handling if we were using them, 
+          // but in LocalStorage they will just be strings/numbers.
+          // We'll treat them as having a .toDate() method for compatibility with existing components
+          const parsed = JSON.parse(savedDeliveries).map((d: any) => ({
+            ...d,
+            deliveryDate: {
+              toDate: () => new Date(d.deliveryDateRaw || d.deliveryDate)
+            }
+          }));
+          setDeliveries(parsed);
+        }
+      } catch (e) {
+        console.error("Failed to load local storage", e);
+      } finally {
+        setLoading(false);
       }
     };
 
-    checkAndSeedData();
+    loadData();
   }, []);
 
-  // Real-time listeners
+  // Sync to LocalStorage whenever state changes
   useEffect(() => {
-    const customersUnsub = onSnapshot(collection(db, 'customers'), (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
-      setCustomers(data);
-      setLoading(false);
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'customers'));
+    if (!loading) {
+      localStorage.setItem('ewindo_customers', JSON.stringify(customers));
+    }
+  }, [customers, loading]);
 
-    const deliveriesUnsub = onSnapshot(
-      query(collection(db, 'deliveries'), orderBy('deliveryDate', 'desc')), 
-      (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ 
-          id: doc.id, 
-          ...doc.data(),
-          deliveryDate: doc.data().deliveryDate
-        } as Delivery));
-        setDeliveries(data);
-      }, (error) => handleFirestoreError(error, OperationType.LIST, 'deliveries')
-    );
+  useEffect(() => {
+    if (!loading) {
+      // Store raw dates for serialization
+      const toStore = deliveries.map(d => ({
+        ...d,
+        deliveryDateRaw: (d.deliveryDate as any).toDate ? (d.deliveryDate as any).toDate().toISOString() : d.deliveryDate
+      }));
+      localStorage.setItem('ewindo_deliveries', JSON.stringify(toStore));
+    }
+  }, [deliveries, loading]);
 
-    return () => {
-      customersUnsub();
-      deliveriesUnsub();
-    };
-  }, []);
+  // CRUD Operations
+  const updateCustomer = async (id: string, data: Partial<Customer>) => {
+    setCustomers(prev => prev.map(c => c.id === id ? { ...c, ...data } : c));
+  };
+
+  const deleteCustomer = async (id: string) => {
+    setCustomers(prev => prev.filter(c => c.id !== id));
+  };
+
+  const createCustomer = async (data: Omit<Customer, 'id'>) => {
+    const newCust = { ...data, id: `cust-${Date.now()}` };
+    setCustomers(prev => [...prev, newCust]);
+  };
+
+  const createDelivery = async (data: Omit<Delivery, 'id'>) => {
+    const newDel = { 
+      ...data, 
+      id: `del-${Date.now()}`,
+      deliveryDate: { toDate: () => (data.deliveryDate as any).toDate ? (data.deliveryDate as any).toDate() : new Date(data.deliveryDate as any) }
+    } as Delivery;
+    setDeliveries(prev => [newDel, ...prev]);
+  };
+
+  const deleteDelivery = async (id: string) => {
+    setDeliveries(prev => prev.filter(d => d.id !== id));
+  };
+
+  const importDeliveries = async (records: Omit<Delivery, 'id'>[]) => {
+    const newRecords = records.map((r, i) => ({
+      ...r,
+      id: `import-${Date.now()}-${i}`,
+      deliveryDate: { toDate: () => (r.deliveryDate as any).toDate ? (r.deliveryDate as any).toDate() : new Date(r.deliveryDate as any) }
+    })) as Delivery[];
+    setDeliveries(prev => [...newRecords, ...prev]);
+  };
 
   const login = (password: string) => {
     if (password === "admin") {
@@ -108,7 +150,11 @@ export default function App() {
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ 
+      user, login, logout, 
+      updateCustomer, deleteCustomer, createCustomer,
+      createDelivery, deleteDelivery, importDeliveries
+    }}>
       <div className="flex h-screen w-full bg-slate-50 text-slate-900 overflow-hidden font-sans">
         <Header activeTab={activeTab} setActiveTab={setActiveTab} />
         

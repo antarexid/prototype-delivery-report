@@ -6,7 +6,6 @@ import Dashboard from './components/Dashboard';
 import DeliveryManager from './components/DeliveryManager';
 import CustomerManager from './components/CustomerManager';
 import AdminLogin from './components/AdminLogin';
-import { motion, AnimatePresence } from 'framer-motion';
 
 interface AuthContextType {
   user: User | null;
@@ -56,16 +55,21 @@ export default function App() {
         }
 
         if (savedDeliveries) {
-          // Firestore Timestamp objects need special handling if we were using them, 
-          // but in LocalStorage they will just be strings/numbers.
-          // We'll treat them as having a .toDate() method for compatibility with existing components
-          const parsed = JSON.parse(savedDeliveries).map((d: any) => ({
-            ...d,
-            deliveryDate: {
-              toDate: () => new Date(d.deliveryDateRaw || d.deliveryDate)
+          try {
+            const json = JSON.parse(savedDeliveries);
+            if (Array.isArray(json)) {
+              const parsed = json.map((d: any) => ({
+                ...d,
+                deliveryDate: {
+                  toDate: () => new Date(d.deliveryDateRaw || d.deliveryDate)
+                }
+              }));
+              setDeliveries(parsed);
             }
-          }));
-          setDeliveries(parsed);
+          } catch (err) {
+            console.error("Failed to parse deliveries", err);
+            localStorage.removeItem('ewindo_deliveries');
+          }
         }
       } catch (e) {
         console.error("Failed to load local storage", e);
@@ -162,44 +166,23 @@ export default function App() {
           <TopHeader setActiveTab={setActiveTab} />
           
           <div className="flex-1 overflow-y-auto px-6 py-6">
-            <AnimatePresence mode="wait">
-              {activeTab === 'dashboard' && (
-                <motion.div
-                  key="dashboard"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                >
-                  <Dashboard customers={customers} deliveries={deliveries} />
-                </motion.div>
-              )}
+            {activeTab === 'dashboard' && (
+              <Dashboard customers={customers} deliveries={deliveries} />
+            )}
 
-              {activeTab === 'delivery' && (
-                <motion.div
-                  key="delivery"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                >
-                  <DeliveryManager customers={customers} deliveries={deliveries} />
-                </motion.div>
-              )}
+            {activeTab === 'delivery' && (
+              <DeliveryManager customers={customers} deliveries={deliveries} />
+            )}
 
-              {activeTab === 'customers' && (
-                <motion.div
-                  key="customers"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                >
-                  {user?.role === 'admin' ? (
-                    <CustomerManager customers={customers} />
-                  ) : (
-                    <AdminLogin onSuccess={() => setActiveTab('customers')} />
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {activeTab === 'customers' && (
+              <div className="max-w-5xl mx-auto">
+                {user?.role === 'admin' ? (
+                  <CustomerManager customers={customers} />
+                ) : (
+                  <AdminLogin onSuccess={() => setActiveTab('customers')} />
+                )}
+              </div>
+            )}
           </div>
 
           <Footer />

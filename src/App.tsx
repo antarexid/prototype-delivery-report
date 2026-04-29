@@ -37,10 +37,12 @@ export default function App() {
 
   // Initialize data from LocalStorage
   useEffect(() => {
+    console.log("App mounted, starting loadData");
     const loadData = () => {
       try {
         const savedCustomers = localStorage.getItem('ewindo_customers');
         const savedDeliveries = localStorage.getItem('ewindo_deliveries');
+        console.log("LocalStorage read", { hasCustomers: !!savedCustomers, hasDeliveries: !!savedDeliveries });
 
         if (savedCustomers) {
           setCustomers(JSON.parse(savedCustomers));
@@ -152,6 +154,8 @@ export default function App() {
       </div>
     );
   }
+
+  console.log("App rendering", { loading, activeTab, user: !!user });
 
   return (
     <AuthContext.Provider value={{ 

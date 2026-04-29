@@ -6,8 +6,21 @@
     <title>Delivery Report</title>
   </head>
   <body>
-    <div id="root" style="background: #fafafa; min-height: 100vh;"></div>
-    <script type="module" src="./src/main.tsx"></script>
+    <div id="root"></div>
+    <script>
+      window.onerror = function(msg, url, lineNo, columnNo, error) {
+        var message = [
+          'Message: ' + msg,
+          'URL: ' + url,
+          'Line: ' + lineNo,
+          'Column: ' + columnNo,
+          'Error object: ' + JSON.stringify(error)
+        ].join(' - ');
+        console.error(message);
+        return false;
+      };
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
 
